@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { Activity, Menu, X, LogOut, Settings, LayoutDashboard, FileText } from "lucide-react";
+import { Activity, Menu, X, LogOut, Settings, LayoutDashboard, FileText, User, Search } from "lucide-react";
 import { useState } from "react";
 
 export default function Navbar() {
@@ -59,11 +59,25 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
+                  href="/scan"
+                  className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <Search className="h-4 w-4" />
+                  Auditoría
+                </Link>
+                <Link
                   href="/settings"
                   className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors"
                 >
                   <Settings className="h-4 w-4" />
                   API Keys
+                </Link>
+                <Link
+                  href="/account"
+                  className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  <User className="h-4 w-4" />
+                  Mi Cuenta
                 </Link>
                 <div className="h-6 w-px bg-gray-200 mx-2"></div>
                 <button
@@ -132,11 +146,25 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
+                  href="/scan"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
+                >
+                  Auditoría
+                </Link>
+                <Link
                   href="/settings"
                   onClick={() => setMobileMenuOpen(false)}
                   className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
                 >
-                  Configuración / API Keys
+                  API Keys
+                </Link>
+                <Link
+                  href="/account"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
+                >
+                  Mi Cuenta
                 </Link>
                 <button
                   onClick={() => signOut()}
