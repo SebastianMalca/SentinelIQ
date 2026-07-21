@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 export async function GET(request: Request) {
   // Proteger el endpoint en producción asegurando que viene de Vercel Cron
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
       // 2. Comparar el CyberScore y enviar alerta si cae
       if (cyberScore < threshold) {
         if (monitor.user?.email) {
-          await resend.emails.send({
+          await getResend().emails.send({
             from: 'SentinelIQ Alertas <onboarding@resend.dev>', // Email de prueba de Resend
             to: monitor.user.email,
             subject: `🚨 Alerta SentinelIQ: CiberScore bajo para ${monitor.url}`,

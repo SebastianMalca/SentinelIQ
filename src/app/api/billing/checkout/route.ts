@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-01-27.acacia',
-});
+import { stripe } from "@/lib/stripe";
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,7 +33,8 @@ export async function POST(req: NextRequest) {
           quantity: 1,
         },
       ],
-      // Importante: pasamos el userId en los metadatos para que el Webhook sepa a quién actualizar
+      // client_reference_id es lo que el webhook usa para identificar al usuario
+      client_reference_id: userId,
       metadata: {
         userId: userId,
         plan: plan

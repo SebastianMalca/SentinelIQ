@@ -1,86 +1,128 @@
 import { NextRequest, NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import { jsPDF } from 'jspdf';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  // Manejo compatible con Next.js 14 y 15 (donde params puede ser una promesa)
-  const resolvedParams = await Promise.resolve(params);
-  const scanId = resolvedParams.id;
+  const { id: scanId } = await params;
 
   try {
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
 
-    const page = await browser.newPage();
-    
-    // Aquí construiríamos la página. Por ahora, un HTML simple simulando el reporte.
-    const htmlContent = `
-      <html>
-        <head>
-          <style>
-            body { font-family: 'Inter', system-ui, sans-serif; padding: 40px; color: #111827; }
-            h1 { color: #2563eb; font-size: 32px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
-            .score-container { display: flex; align-items: center; gap: 20px; margin-top: 30px; }
-            .score { font-size: 64px; font-weight: 800; color: #16a34a; }
-            .card { border: 1px solid #e5e7eb; padding: 24px; border-radius: 12px; margin-top: 30px; background: #f9fafb; }
-            .label { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; font-weight: 600; }
-            .footer { margin-top: 50px; font-size: 12px; color: #9ca3af; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <h1>Auditoría de Salud - SentinelIQ</h1>
-          <p class="label">Scan ID: ${scanId}</p>
-          
-          <div class="card">
-            <div class="label">CyberScore Global</div>
-            <div class="score-container">
-              <div class="score">98</div>
-              <p style="color: #4b5563; font-size: 18px; max-width: 400px;">
-                El sitio web tiene un rendimiento excelente y cumple con todos los estándares modernos de seguridad y accesibilidad.
-              </p>
-            </div>
-          </div>
-          
-          <div style="margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="card" style="margin-top: 0;">
-              <div class="label">Rendimiento</div>
-              <div style="font-size: 32px; font-weight: bold; color: #16a34a; margin-top: 10px;">100/100</div>
-            </div>
-            <div class="card" style="margin-top: 0;">
-              <div class="label">Seguridad</div>
-              <div style="font-size: 32px; font-weight: bold; color: #ca8a04; margin-top: 10px;">92/100</div>
-            </div>
-          </div>
+    // --- Header ---
+    doc.setFontSize(26);
+    doc.setTextColor(37, 99, 235); // #2563eb
+    doc.text('Auditoría de Salud - SentinelIQ', 20, 30);
 
-          <div class="footer">
-            Generado automáticamente por SentinelIQ &copy; ${new Date().getFullYear()}
-          </div>
-        </body>
-      </html>
-    `;
+    // Divider line
+    doc.setDrawColor(229, 231, 235); // #e5e7eb
+    doc.setLineWidth(0.5);
+    doc.line(20, 36, pageWidth - 20, 36);
 
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
-    });
+    // Scan ID label
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128); // #6b7280
+    doc.text(`SCAN ID: ${scanId}`, 20, 44);
 
-    await browser.close();
+    // --- CyberScore Card ---
+    doc.setFillColor(249, 250, 251); // #f9fafb
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(20, 52, pageWidth - 40, 60, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('CYBERSCORE GLOBAL', 30, 64);
+
+    doc.setFontSize(48);
+    doc.setTextColor(22, 163, 74); // #16a34a
+    doc.text('98', 30, 92);
+
+    doc.setFontSize(11);
+    doc.setTextColor(75, 85, 99);
+    const description =
+      'El sitio web tiene un rendimiento excelente y cumple con todos los estándares modernos de seguridad y accesibilidad.';
+    const splitDesc = doc.splitTextToSize(description, 95);
+    doc.text(splitDesc, 62, 78);
+
+    // --- Metric Cards ---
+    const cardY = 125;
+    const cardWidth = (pageWidth - 50) / 2;
+
+    // Performance Card
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(20, cardY, cardWidth, 45, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('RENDIMIENTO', 30, cardY + 15);
+
+    doc.setFontSize(26);
+    doc.setTextColor(22, 163, 74);
+    doc.text('100/100', 30, cardY + 34);
+
+    // Security Card
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(30 + cardWidth, cardY, cardWidth, 45, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('SEGURIDAD', 40 + cardWidth, cardY + 15);
+
+    doc.setFontSize(26);
+    doc.setTextColor(202, 138, 4); // #ca8a04
+    doc.text('92/100', 40 + cardWidth, cardY + 34);
+
+    // --- Accessibility & SEO Cards ---
+    const card2Y = 180;
+
+    // Accessibility Card
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(20, card2Y, cardWidth, 45, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('ACCESIBILIDAD', 30, card2Y + 15);
+
+    doc.setFontSize(26);
+    doc.setTextColor(22, 163, 74);
+    doc.text('95/100', 30, card2Y + 34);
+
+    // SEO Card
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(30 + cardWidth, card2Y, cardWidth, 45, 3, 3, 'FD');
+
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('SEO', 40 + cardWidth, card2Y + 15);
+
+    doc.setFontSize(26);
+    doc.setTextColor(22, 163, 74);
+    doc.text('97/100', 40 + cardWidth, card2Y + 34);
+
+    // --- Footer ---
+    doc.setFontSize(8);
+    doc.setTextColor(156, 163, 175);
+    const footer = `Generado automáticamente por SentinelIQ © ${new Date().getFullYear()}`;
+    const footerWidth = doc.getTextWidth(footer);
+    doc.text(footer, (pageWidth - footerWidth) / 2, 275);
+
+    // Generate PDF buffer
+    const pdfArrayBuffer = doc.output('arraybuffer');
+    const pdfBuffer = Buffer.from(pdfArrayBuffer);
 
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="sentineliq-report-${scanId}.pdf"`
-      }
+        'Content-Disposition': `attachment; filename="sentineliq-report-${scanId}.pdf"`,
+      },
     });
-
   } catch (error) {
     console.error('Error generando PDF:', error);
     return NextResponse.json(
