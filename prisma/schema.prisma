@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------
+
+enum Plan {
+  FREE
+  PRO
+  BUSINESS
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+}
+
+// ------------------------------------------------------
+// MODELOS
+// ------------------------------------------------------
+
+model User {
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  name                   String?
+  password               String?
+  
+  // Campos de Stripe requeridos
+  stripe_customer_id     String?   @unique
+  stripe_subscription_id String?   @unique
+  plan                   Plan      @default(FREE)
+  
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  // Relaciones
+  monitors               Monitor[]
+  apiKeys                ApiKey[]
+
+  @@map("users")
+}
+
+model Monitor {
+  id        String    @id @default(uuid())
+  url       String
+  frequency Frequency @default(WEEKLY)
+  
+  // Relación con el usuario
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("monitors")
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String?  // Ej: "Clave de Producción"
+  
+  // Relación con el usuario
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("api_keys")
+}
