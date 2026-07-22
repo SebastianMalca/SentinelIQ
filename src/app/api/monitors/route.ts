@@ -13,9 +13,15 @@ export async function POST(req: NextRequest) {
     const { url, frequency } = await req.json();
     const userId = session.user.id; 
 
-    // Opcional: validar si el usuario es Pro/Business para crear múltiples monitores
-    // const user = await prisma.user.findUnique({ where: { id: userId } });
-    // if (!user || user.plan === 'FREE') throw new Error("Plan upgrade required");
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+
+    if (user.plan === 'FREE') {
+      const monitorCount = await prisma.monitor.count({ where: { userId } });
+      if (monitorCount >= 1) {
+        return NextResponse.json({ error: "Has alcanzado el límite de 1 monitor en tu plan gratuito. Sube a un plan de pago para agregar más." }, { status: 403 });
+      }
+    }
 
     const monitor = await prisma.monitor.create({
       data: {

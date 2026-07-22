@@ -132,7 +132,14 @@ export default function ScanPage() {
       {status === 'error' && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3">
           <AlertCircle className="h-6 w-6 text-red-500 flex-shrink-0" />
-          <p className="text-red-700 font-medium text-lg">{errorMsg}</p>
+          <div className="flex-1">
+            <p className="text-red-700 font-medium text-lg">{errorMsg}</p>
+            {errorMsg.toLowerCase().includes('límite') && (
+              <a href="/pricing" className="mt-3 inline-block text-sm bg-red-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-red-700 transition-colors shadow-sm">
+                Mejorar Plan
+              </a>
+            )}
+          </div>
         </div>
       )}
 

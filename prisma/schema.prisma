@@ -38,6 +38,10 @@ model User {
   
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
+  
+  // Límites de uso
+  scansToday             Int       @default(0)
+  lastScanDate           DateTime?
 
   // Relaciones
   monitors               Monitor[]
