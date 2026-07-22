@@ -3,20 +3,7 @@ import { jsPDF } from 'jspdf';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-
-// Función para generar un número pseudoaleatorio basado en una semilla (string)
-function seededRandom(seed: string) {
-  let h = 0xdeadbeef;
-  for (let i = 0; i < seed.length; i++)
-    h = Math.imul(h ^ seed.charCodeAt(i), 2654435761);
-  return ((h ^ h >>> 16) >>> 0) / 4294967296;
-}
-
-// Función para generar un score entre min y max usando la semilla
-function generateScore(seed: string, min: number, max: number): number {
-  const rand = seededRandom(seed);
-  return Math.floor(rand * (max - min + 1)) + min;
-}
+import { scanUrl } from "@/lib/scanner";
 
 export async function GET(
   req: NextRequest,
@@ -25,7 +12,6 @@ export async function GET(
   const { id: scanId } = await params;
 
   try {
-    // 1. Obtener el monitor de la base de datos
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,99 +29,118 @@ export async function GET(
       return NextResponse.json({ error: "No tienes permiso para ver este reporte" }, { status: 403 });
     }
 
-    // 2. Calcular scores dinámicos basados en la URL
-    const normalizedUrl = monitor.url.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const isLocalhost = normalizedUrl.includes('localhost') || normalizedUrl.includes('127.0.0.1');
-    
-    const performance = isLocalhost ? generateScore(normalizedUrl + "perf", 80, 100) : generateScore(normalizedUrl + "perf", 60, 100);
-    const security = isLocalhost ? generateScore(normalizedUrl + "sec", 30, 60) : generateScore(normalizedUrl + "sec", 70, 100);
-    const accessibility = generateScore(normalizedUrl + "acc", 75, 100);
-    const seo = isLocalhost ? generateScore(normalizedUrl + "seo", 40, 70) : generateScore(normalizedUrl + "seo", 70, 100);
+    // ===== Escaneo real del sitio web =====
+    const scanResult = await scanUrl(monitor.url);
 
-    const globalScore = Math.round((performance + security + accessibility + seo) / 4);
+    const { scores, findings, serverInfo } = scanResult;
 
-    // 3. Generar PDF
+    // ===== Generar PDF =====
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const normalizedUrl = monitor.url.replace(/^https?:\/\//, '').replace(/\/$/, '');
 
     // --- Header ---
-    doc.setFontSize(26);
-    doc.setTextColor(37, 99, 235); // #2563eb
-    doc.text('Auditoría de Salud - SentinelIQ', 20, 30);
+    doc.setFontSize(24);
+    doc.setTextColor(37, 99, 235);
+    doc.text('Auditoría de Seguridad - SentinelIQ', 20, 28);
 
-    // Divider line
-    doc.setDrawColor(229, 231, 235); // #e5e7eb
-    doc.setLineWidth(0.5);
-    doc.line(20, 36, pageWidth - 20, 36);
-
-    // Scan ID y URL label
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128); // #6b7280
-    doc.text(`SCAN ID: ${scanId}`, 20, 44);
-    doc.text(`DOMINIO: ${normalizedUrl}`, 20, 49);
-
-    // --- CyberScore Card ---
-    doc.setFillColor(249, 250, 251); // #f9fafb
     doc.setDrawColor(229, 231, 235);
-    doc.roundedRect(20, 56, pageWidth - 40, 60, 3, 3, 'FD');
+    doc.setLineWidth(0.5);
+    doc.line(20, 34, pageWidth - 20, 34);
 
     doc.setFontSize(9);
     doc.setTextColor(107, 114, 128);
-    doc.text('CYBERSCORE GLOBAL', 30, 68);
+    doc.text(`DOMINIO: ${normalizedUrl}`, 20, 42);
+    doc.text(`FECHA: ${new Date().toLocaleDateString('es-PE')}`, 20, 47);
+    if (serverInfo.server) {
+      doc.text(`SERVIDOR: ${serverInfo.server}  |  TTFB: ${serverInfo.responseTimeMs}ms  |  ${serverInfo.isHttps ? 'HTTPS' : 'HTTP'}`, 20, 52);
+    }
 
-    doc.setFontSize(48);
-    if (globalScore >= 90) doc.setTextColor(22, 163, 74); // Verde
-    else if (globalScore >= 70) doc.setTextColor(202, 138, 4); // Amarillo
-    else doc.setTextColor(220, 38, 38); // Rojo
-    doc.text(globalScore.toString(), 30, 96);
+    // --- CyberScore Card ---
+    const cyberY = 58;
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(229, 231, 235);
+    doc.roundedRect(20, cyberY, pageWidth - 40, 50, 3, 3, 'FD');
 
-    doc.setFontSize(11);
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text('CYBERSCORE GLOBAL', 30, cyberY + 12);
+
+    doc.setFontSize(44);
+    if (scores.global >= 90) doc.setTextColor(22, 163, 74);
+    else if (scores.global >= 70) doc.setTextColor(202, 138, 4);
+    else doc.setTextColor(220, 38, 38);
+    doc.text(scores.global.toString(), 30, cyberY + 38);
+
+    doc.setFontSize(10);
     doc.setTextColor(75, 85, 99);
-    
-    let description = 'El sitio web necesita optimizaciones urgentes de seguridad y rendimiento.';
-    if (globalScore >= 90) description = 'El sitio web tiene un rendimiento excelente y cumple con todos los estándares modernos de seguridad y accesibilidad.';
-    else if (globalScore >= 70) description = 'El sitio web está en buen estado, pero presenta oportunidades de mejora en métricas clave de seguridad o rendimiento.';
+    let description = 'El sitio presenta vulnerabilidades críticas que requieren atención inmediata.';
+    if (scores.global >= 90) description = 'El sitio cumple con los estándares modernos de seguridad, rendimiento y accesibilidad.';
+    else if (scores.global >= 70) description = 'El sitio tiene una base sólida pero presenta oportunidades de mejora en seguridad o rendimiento.';
+    const splitDesc = doc.splitTextToSize(description, 100);
+    doc.text(splitDesc, 60, cyberY + 24);
 
-    const splitDesc = doc.splitTextToSize(description, 95);
-    doc.text(splitDesc, 62, 82);
-
-    // Función auxiliar para dibujar tarjetas
-    const drawCard = (title: string, score: number, x: number, y: number, width: number) => {
+    // --- Score Cards ---
+    const drawCard = (title: string, score: number, x: number, y: number, w: number) => {
       doc.setFillColor(249, 250, 251);
       doc.setDrawColor(229, 231, 235);
-      doc.roundedRect(x, y, width, 45, 3, 3, 'FD');
-
-      doc.setFontSize(9);
+      doc.roundedRect(x, y, w, 38, 3, 3, 'FD');
+      doc.setFontSize(8);
       doc.setTextColor(107, 114, 128);
-      doc.text(title, x + 10, y + 15);
-
-      doc.setFontSize(26);
+      doc.text(title, x + 8, y + 12);
+      doc.setFontSize(22);
       if (score >= 90) doc.setTextColor(22, 163, 74);
       else if (score >= 70) doc.setTextColor(202, 138, 4);
       else doc.setTextColor(220, 38, 38);
-      
-      doc.text(`${score}/100`, x + 10, y + 34);
+      doc.text(`${score}/100`, x + 8, y + 30);
     };
 
-    // --- Metric Cards ---
-    const cardY = 130;
-    const cardWidth = (pageWidth - 50) / 2;
+    const cardY = 116;
+    const cw = (pageWidth - 60) / 4;
+    drawCard('RENDIMIENTO', scores.performance, 20, cardY, cw);
+    drawCard('SEGURIDAD', scores.security, 25 + cw, cardY, cw);
+    drawCard('ACCESIBILIDAD', scores.accessibility, 30 + cw * 2, cardY, cw);
+    drawCard('SEO', scores.seo, 35 + cw * 3, cardY, cw);
 
-    drawCard('RENDIMIENTO', performance, 20, cardY, cardWidth);
-    drawCard('SEGURIDAD', security, 30 + cardWidth, cardY, cardWidth);
+    // --- Hallazgos (errores y warnings) ---
+    let findY = 164;
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.text('Hallazgos Destacados', 20, findY);
+    findY += 8;
 
-    // --- Accessibility & SEO Cards ---
-    const card2Y = 185;
-    
-    drawCard('ACCESIBILIDAD', accessibility, 20, card2Y, cardWidth);
-    drawCard('SEO', seo, 30 + cardWidth, card2Y, cardWidth);
+    const importantFindings = findings.filter(f => f.type === 'error' || f.type === 'warning');
+
+    for (const finding of importantFindings.slice(0, 12)) {
+      if (findY > 265) {
+        doc.addPage();
+        findY = 20;
+      }
+
+      const icon = finding.type === 'error' ? '✗' : '⚠';
+      doc.setFontSize(8);
+      
+      if (finding.type === 'error') {
+        doc.setTextColor(220, 38, 38);
+      } else {
+        doc.setTextColor(202, 138, 4);
+      }
+      doc.text(icon, 22, findY);
+
+      doc.setTextColor(31, 41, 55);
+      doc.setFontSize(8);
+      const findingText = doc.splitTextToSize(`[${finding.category.toUpperCase()}] ${finding.text}`, pageWidth - 50);
+      doc.text(findingText, 28, findY);
+      
+      findY += findingText.length * 4 + 4;
+    }
 
     // --- Footer ---
-    doc.setFontSize(8);
+    doc.setFontSize(7);
     doc.setTextColor(156, 163, 175);
-    const footer = `Generado automáticamente por SentinelIQ © ${new Date().getFullYear()}`;
+    const footer = `Generado por SentinelIQ © ${new Date().getFullYear()} — Escaneo real de cabeceras HTTP, SEO y accesibilidad`;
     const footerWidth = doc.getTextWidth(footer);
-    doc.text(footer, (pageWidth - footerWidth) / 2, 275);
+    doc.text(footer, (pageWidth - footerWidth) / 2, 285);
 
     // Generate PDF buffer
     const pdfArrayBuffer = doc.output('arraybuffer');
